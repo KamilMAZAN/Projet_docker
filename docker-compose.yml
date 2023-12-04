@@ -7,7 +7,7 @@ services:
       - "80:80"
     depends_on:
       - postgres
-      - mongodb
+      - elasticsearch
   postgres:
     image: postgres:latest
     environment:
@@ -17,12 +17,15 @@ services:
     volumes:
       - ./init-scripts:/docker-entrypoint-initdb.d
       - pg-data:/var/lib/postgresql/data
-  mongodb:
-    image: mongo:latest
-    volumes:
-    - mongo-data:/data/db
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.0
+    environment:
+      - discovery.type=single-node
+    ports:
+      - "9200:9200"
+      - "9300:9300"
 
 volumes:
   pg-data:
-  mongo-data:
+
 

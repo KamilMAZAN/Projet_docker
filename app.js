@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const { Pool } = require('pg');
-const { MongoClient } = require('mongodb');
+const { Client } = require('@elastic/elasticsearch');
 
 const app = express();
 const port = 80;
@@ -15,15 +15,28 @@ const pgPool = new Pool({
   port: 5432,
 });
 
-// MongoDB configuration
-const mongoUri = 'mongodb://mongodb:27017';
-const mongoClient = new MongoClient(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true });
+// Elasticsearch configuration
+const esClient = new Client({ node: 'http://elasticsearch:9200' });
+
+// Vérifier l'existence de l'index et le créer si nécessaire
+async function ensureIndexExists() {
+  const { body: indexExists } = await esClient.indices.exists({ index: 'myindex' });
+
+  if (!indexExists) {
+    await esClient.indices.create({ index: 'myindex' });
+  }
+}
+
 
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/index.html');
 });
+
+// Appeler cette fonction avant de démarrer le serveur
+ensureIndexExists();
+
 
 app.post('/submit', async (req, res) => {
   const data = req.body.data;
@@ -34,18 +47,16 @@ app.post('/submit', async (req, res) => {
     await pgClient.query('INSERT INTO mytable (data) VALUES ($1)', [data]);
     pgClient.release();
 
-    // MongoDB
-    await mongoClient.connect();
-    const mongoDatabase = mongoClient.db('data');
-    const mongoCollection = mongoDatabase.collection('mycollection');
-    await mongoCollection.insertOne({ data: data });
+    // Elasticsearch
+    await esClient.index({
+      index: 'myindex',
+      body: { data: data },
+    });
 
-    res.send('Data Submitted Successfully to PostgreSQL and MongoDB!');
+    res.send('Data Submitted Successfully to PostgreSQL and Elasticsearch!');
   } catch (error) {
     console.error(error);
     res.status(500).send('Error submitting data to databases');
-  } finally {
-    await mongoClient.close();
   }
 });
 
